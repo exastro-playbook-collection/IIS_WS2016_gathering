@@ -1,0 +1,40 @@
+---
+# check iis installed
+  - name: check iis installed
+    raw: Get-WindowsFeature -Name Web-Server,Web-WebServer,Web-Security,Web-Filtering,Web-Common-Http,Web-Http-Errors,Web-Static-Content,Web-Default-Doc,Web-Dir-Browsing,Web-Performance,Web-Stat-Compression,Web-Health,Web-Http-Logging
+    register: webserver_state
+    changed_when: webserver_state.rc != 0
+
+  - name: get iis installed result
+    fail: msg="IIS is not installed, please install IIS."
+    when: "'Available' in webserver_state.stdout or ' InstallPending' in webserver_state.stdout or ' UninstallPending' in webserver_state.stdout"
+
+  - name: check param VAR_IIS_gathering_dest
+    fail:
+      msg: "Parameter VAR_IIS_gathering_dest cannot be NULL."
+    when: "(VAR_IIS_gathering_dest is none) or (VAR_IIS_gathering_dest == '')"
+
+  - name: get IISInstall Path
+    win_reg_stat:
+      path: HKLM:\SOFTWARE\Microsoft\InetStp
+      name: InstallPath
+    register: installPath_result
+
+  - name: set IISInstall Path
+    set_fact:
+      VAR_IISInstall_Path: "{{ installPath_result.value }}"
+    when: installPath_result.exists == true
+
+  - name: import roles
+    import_role:
+      name: '{{ playbook_dir }}/roles/gathering'
+    vars:
+      VAR_gathering_definition_role_path: '{{ playbook_dir }}/roles/IIS_WS2016_gathering'
+      VAR_gathering_label: "IIS_WS2016_gathering"
+
+  - name: Copy data
+    copy:
+      src: "{{ gathered_data_dest }}/"
+      dest: "{{ VAR_IIS_gathering_dest }}/{{ inventory_hostname }}/IIS_WS2016_gathering"
+    delegate_to: localhost
+    become: no
